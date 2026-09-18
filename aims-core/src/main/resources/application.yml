@@ -1,0 +1,21 @@
+spring:
+  application:
+    name: aims-core
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:aims}
+    username: ${DB_USER:aims}
+    password: ${DB_PASSWORD:aims}
+  flyway:
+    enabled: true
+
+server:
+  port: 8081
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: always
