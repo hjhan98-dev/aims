@@ -22,6 +22,11 @@ __pycache__/
 .venv/
 venv/
 *.egg-info/
+.pytest_cache/
+
+### aims-collector runtime state ###
+.collector_offset
+dead_letter.log
 
 ### Env / Secrets ###
 .env

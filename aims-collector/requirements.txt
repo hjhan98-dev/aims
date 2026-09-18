@@ -1,1 +1,1 @@
-# Populated in Phase 3 when tail/parse/DB-insert logic is implemented.
+psycopg2-binary
