@@ -134,20 +134,18 @@ Phase 11 - E2E 검증 + 문서화
 
 ## 7. 검증 상태
 
-개발 환경(회사 원격 PC)에서는 Docker Desktop을 사용할 수 없어 아래와 같이 검증이 나뉘어 있습니다.
+개발 환경(회사 원격 PC)에서는 Docker Desktop을 사용할 수 없어, PostgreSQL은 **로컬에 직접 설치**해서 검증했습니다. Docker Compose 자체(`infra/docker-compose.yml`)는 별도로 검증이 필요합니다.
 
-**검증 완료**
+**검증 완료 (로컬 PostgreSQL 기준)**
 
-- `aims-demo`: `./gradlew build` 성공 (컴파일 + 컨텍스트 로딩 테스트 통과)
-- `aims-core`: `./gradlew compileJava compileTestJava` 성공 (컴파일 검증만, DB 연동 테스트는 미실행)
-- `aims-collector`: 스캐폴드 실행 확인 (`aims_collector/main.py` 정상 동작)
+- `aims-demo`: `./gradlew build` 성공, 실제 기동 후 3개 API + NORMAL/SLOW_DB/EXCEPTION 시나리오 + structured log 생성 확인
+- `aims-core`: 로컬 PostgreSQL에 연결해 Flyway `V1`+`V2` migration 실제 적용, 5개 테이블 + `service_log.trace_id` UNIQUE 제약 생성 확인, `/actuator/health`의 `db` 컴포넌트 `UP` 확인
+- `aims-collector`: 실제 로그 파일을 tail하여 PostgreSQL `service_log`에 실제 INSERT 확인, DB 장애 시 offset 미전진(재시도) 확인, 동일 배치 재처리 시 중복 미삽입 확인
+- **End-to-end (EXCEPTION 시나리오 포함)**: `aims-demo` → `aims-collector` → PostgreSQL 전체 파이프라인을 NORMAL 요청과 EXCEPTION 시나리오 모두에 대해 실제로 실행해 `service_log`에 `status_code=500`, `exception_type=SimulatedFailureException` 행까지 정상 적재되는 것을 확인 (실제 캡처: 8절 "실행 결과 예시" 참고)
 
-**미검증 (Docker 환경 필요)**
+**미검증**
 
-- PostgreSQL 실제 기동
-- Flyway `V1` migration 실제 실행
-- 5개 테이블 실제 생성 확인
-- `aims-core`의 DB health check (`/actuator/health`의 `db` 컴포넌트)
+- `infra/docker-compose.yml`을 통한 PostgreSQL 기동 (Docker Desktop 필요 — Mac 등 Docker 가능 환경에서 검증 예정)
 
 ---
 
@@ -162,7 +160,7 @@ cd aims-demo
 curl http://localhost:8080/actuator/health
 ```
 
-### PostgreSQL + aims-core (Docker 환경 필요 — 검증 예정)
+### PostgreSQL + aims-core (Docker 환경, Mac 등 — 검증 예정)
 
 ```bash
 cd infra
@@ -176,11 +174,121 @@ curl http://localhost:8081/actuator/health   # 검증 예정 (db 컴포넌트 UP
 docker exec -it aims-postgres psql -U aims -d aims -c '\dt'   # 검증 예정 (5개 테이블 확인)
 ```
 
-### aims-collector (검증 완료 — 스캐폴드만)
+### 로컬 Windows 환경에서 Docker 없이 전체 파이프라인 실행하기 (검증 완료)
+
+회사 원격 PC처럼 Docker를 쓸 수 없는 환경에서는, PostgreSQL을 로컬에 직접 설치해서 동일하게 테스트할 수 있습니다.
+
+**0) 사전 준비 (한 번만)**
+
+- PostgreSQL을 로컬에 설치하고 로그인 계정을 만든 뒤, `aims` 데이터베이스를 생성합니다.
+  ```sql
+  CREATE DATABASE aims;
+  ```
+- **JDK 17**이 필요합니다 (Spring Boot 3.3.4는 빌드 자체에 JDK 17 이상을 요구). 회사 PC처럼 다른 프로젝트가 Java 8을 쓰고 있어 전역 `JAVA_HOME`을 바꿀 수 없다면, JDK 17만 별도로 설치한 뒤 `aims-demo/`와 `aims-core/`에 각각 `gradle.properties`를 만들어 그 프로젝트에서만 사용하도록 지정합니다(전역 설정을 건드리지 않음, `.gitignore`에 등록되어 있어 각자 로컬에 직접 만들어야 함).
+  ```properties
+  # aims-demo/gradle.properties, aims-core/gradle.properties (각각 생성)
+  org.gradle.java.home=C:/Program Files/Eclipse Adoptium/jdk-17.x.x-hotspot
+  ```
+- Python(3.10+)이 필요합니다. 설치 후:
+  ```bash
+  cd aims-collector
+  pip install -r requirements-dev.txt
+  ```
+
+**1) DB 접속 정보를 로컬 전용 파일로 등록** (모두 `.gitignore`에 등록되어 있어 저장소에는 없음 — 각자 로컬에 직접 생성)
+
+```yaml
+# aims-core/src/main/resources/application-local.yml
+spring:
+  datasource:
+    username: <본인 DB 계정>
+    password: <본인 DB 비밀번호>
+```
+
+```powershell
+# aims-collector/set_local_env.ps1
+$env:DB_HOST = "localhost"
+$env:DB_PORT = "5432"
+$env:DB_NAME = "aims"
+$env:DB_USER = "<본인 DB 계정>"
+$env:DB_PASSWORD = "<본인 DB 비밀번호>"
+```
+
+**2) aims-core 실행 → Flyway migration 적용 확인**
+
+```powershell
+cd aims-core
+$env:SPRING_PROFILES_ACTIVE = "local"
+.\gradlew bootRun
+```
+`db: UP`이 나오면 성공:
+```powershell
+curl http://localhost:8081/actuator/health
+```
+
+**3) aims-demo 실행 (계속 켜둠)**
+
+```powershell
+cd aims-demo
+.\gradlew bootRun
+```
+
+**4) 요청을 보내 structured log 생성**
+
+```powershell
+Invoke-RestMethod -Uri http://localhost:8080/api/passengers/checkin -Method Post -ContentType "application/json" -Body '{"flightNumber":"OZ1234","passengerName":"Hong Gildong"}'
+Invoke-RestMethod -Uri http://localhost:8080/api/flights/OZ1234
+Invoke-RestMethod -Uri http://localhost:8080/api/baggage -Method Post -ContentType "application/json" -Body '{"flightNumber":"OZ1234","weightKg":18.5}'
+```
+
+**5) aims-collector 실행 (계속 켜둠) → 로그를 PostgreSQL로 적재**
+
+```powershell
+cd aims-collector
+. .\set_local_env.ps1
+python -m aims_collector.main
+```
+`processed batch: N lines read, N valid, N inserted, offset -> ...` 로그가 뜨면 정상입니다.
+
+**6) DB에서 결과 확인**
+
+```powershell
+psql -U <본인 DB 계정> -h localhost -d aims -c "SELECT trace_id, endpoint, status_code, response_time_ms FROM service_log ORDER BY id DESC LIMIT 10;"
+```
+
+**장애 시나리오까지 확인하려면** (창3이 계속 켜진 상태에서):
+```powershell
+Invoke-RestMethod -Uri http://localhost:8080/admin/scenario/exception -Method Post
+Invoke-RestMethod -Uri http://localhost:8080/api/baggage -Method Post -ContentType "application/json" -Body '{"flightNumber":"OZ1234","weightKg":18.5}'
+Invoke-RestMethod -Uri http://localhost:8080/admin/scenario/normal -Method Post
+```
+`status_code=500`, `exception_type=SimulatedFailureException`인 행이 `service_log`에 그대로 들어오는 것을 확인할 수 있습니다.
+
+### 실행 결과 예시 (실제 캡처, EXCEPTION 시나리오 포함)
+
+위 절차를 로컬 Windows 환경(Docker 없이, 로컬 PostgreSQL)에서 실제로 실행한 화면입니다. NORMAL 요청과 EXCEPTION 시나리오를 함께 재현했습니다.
+
+**1) aims-demo — 구조화 로그 출력** (NORMAL 요청과 EXCEPTION 요청이 각각 INFO/ERROR로 기록됨)
+
+![aims-demo 실행 화면](docs/screenshots/01-aims-demo.webp)
+
+**2) aims-collector — 로그를 tail하여 PostgreSQL에 적재**
+
+![aims-collector 실행 화면](docs/screenshots/02-aims-collector.webp)
+
+**3) 요청 전송 — EXCEPTION 시나리오 전환 후 baggage 호출 시 실제 500 에러 발생**
+
+![요청 전송 화면](docs/screenshots/03-request.png)
+
+**4) DB 확인 — `status_code=500`인 행이 실제로 `service_log`에 적재됨**
+
+![DB 확인 화면](docs/screenshots/04-db-check.webp)
+
+### aims-collector 단독 테스트
 
 ```bash
 cd aims-collector
-python -m aims_collector.main
+pytest -v   # DB 연결이 안 되는 테스트 1개는 자동으로 skip됨
 ```
 
 ---

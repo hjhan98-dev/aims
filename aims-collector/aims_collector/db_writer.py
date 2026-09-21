@@ -45,6 +45,9 @@ class DbWriter:
             with conn:
                 with conn.cursor() as cur:
                     execute_values(cur, INSERT_SQL, values)
-            return len(rows)
+                    # cur.rowcount reflects rows actually inserted, which is
+                    # less than len(rows) whenever ON CONFLICT DO NOTHING
+                    # skipped a duplicate trace_id.
+                    return cur.rowcount
         finally:
             conn.close()

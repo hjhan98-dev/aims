@@ -31,6 +31,9 @@ dead_letter.log
 ### Env / Secrets ###
 .env
 *.env.local
+application-local.yml
+set_local_env.ps1
+gradle.properties
 
 ### Runtime logs (aims-demo structured access log, etc.) ###
 logs/

@@ -5,6 +5,8 @@ Flyway migrations already applied by aims-core) to be reachable. Skips
 itself automatically when no database is available, e.g. in this
 environment where Docker Desktop cannot run.
 """
+import uuid
+
 import pytest
 
 from aims_collector import config
@@ -44,7 +46,9 @@ def make_row(trace_id: str) -> ServiceLogRow:
 
 def test_duplicate_trace_id_is_not_inserted_twice():
     writer = DbWriter(config.DATABASE_DSN)
-    row = make_row("integration-test-trace-1")
+    # A fresh id per run avoids collisions with rows left over from a
+    # previous run of this same test against a persistent local database.
+    row = make_row(f"integration-test-{uuid.uuid4()}")
 
     first = writer.insert_batch([row])
     second = writer.insert_batch([row])
