@@ -16,11 +16,10 @@ class ServiceLogRow:
 
 
 def normalize(record: dict) -> ServiceLogRow:
-    """Maps aims-demo's Phase 2 log field names to the service_log schema.
+    """aims-demo(Phase 2) 로그 필드명을 service_log 스키마 컬럼명으로 매핑함.
 
-    `method` and `scenario` are present in the log but have no corresponding
-    service_log column in the current schema, so they are intentionally
-    dropped here rather than stored.
+    `method`, `scenario`는 로그에는 있지만 현재 스키마에 대응 컬럼이 없어서
+    여기서 의도적으로 버리고 저장하지 않음.
     """
     return ServiceLogRow(
         timestamp=record["timestamp"],

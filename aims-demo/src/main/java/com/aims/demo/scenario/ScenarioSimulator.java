@@ -5,8 +5,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class ScenarioSimulator {
 
-    // No real database is involved; SLOW_DB only simulates a slow downstream
-    // dependency by blocking the request thread for a fixed duration.
+    // 실제 DB 접근은 전혀 없음; SLOW_DB는 요청 스레드를 일정 시간 동안 블로킹시켜
+    // 느린 다운스트림 의존성을 흉내내기만 함
     private static final long SLOW_DB_SIMULATED_DELAY_MS = 3000L;
 
     private final ScenarioState scenarioState;

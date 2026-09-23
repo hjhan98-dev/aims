@@ -1,5 +1,5 @@
--- AIMS Phase 1 baseline schema
--- Tables: service_log, metric_snapshot, incident, incident_signal, ai_analysis
+-- AIMS Phase 1 기본 스키마
+-- 테이블: service_log, metric_snapshot, incident, incident_signal, ai_analysis
 
 CREATE TABLE service_log (
     id                  BIGSERIAL PRIMARY KEY,

@@ -28,24 +28,40 @@ AI Analysis
 Alert
 ```
 
-이 흐름 전체를 실제로 동작하는 백엔드 시스템으로 구현하는 것이 이 프로젝트의 목표이며, 현재는 그 중 **Phase 1(프로젝트/DB 기반 구성)** 까지만 진행된 상태입니다.
+이 흐름 전체를 실제로 동작하는 백엔드 시스템으로 구현하는 것이 이 프로젝트의 목표이며, 현재는 **PostgreSQL 적재까지(Log Collector)와 Metric Aggregation** 까지 실제로 동작하는 상태이고, **Rule Detection부터 Alert까지는 아직 구현 전**입니다.
 
 ---
 
-## 2. 현재 Phase 1 상태
+## 2. 현재 진행 상태
 
-Phase 1은 이후 모든 기능이 얹힐 프로젝트 구조와 DB 기반을 준비하는 단계이며, **실제 로그 수집/탐지/AI 분석 기능은 아직 구현되지 않았습니다.**
+아래는 [Phase Roadmap](#6-phase-roadmap) 기준 진행 상황입니다.
 
-Phase 1에서 완료한 것:
+**Phase 1 — 프로젝트/DB 기반 구성 (완료)**
 
 - monorepo 구조 (`aims-demo` / `aims-core` / `aims-collector` / `infra`)
-- `aims-demo` skeleton (Spring Boot, 부팅만 가능, 업무 API 없음)
-- `aims-core` skeleton (Spring Boot, PostgreSQL/Flyway 연결 구성, 도메인 로직 없음)
-- `aims-collector` skeleton (Python, 실행 진입점만 존재, 수집 로직 없음)
-- PostgreSQL Docker Compose 정의
+- 세 서비스 모두 부팅 가능한 최소 골격 구성
 - Flyway `V1__init_schema.sql` 작성 (5개 테이블 정의)
-- Java 17 / Spring Boot 3.3.4 기반 확정
-- Python collector 최소 구조
+- Java 17 / Spring Boot 3.3.4, PostgreSQL Docker Compose 정의
+
+**Phase 2 — aims-demo + structured log (완료)**
+
+- Check-in / Flight / Baggage API 3종
+- `NORMAL` / `SLOW_DB` / `EXCEPTION` 장애 시나리오 + Admin API
+- 요청마다 NDJSON 구조화 로그 생성 (route template, latency, trace ID, 예외 정보 포함)
+
+**Phase 3 — aims-collector (완료)**
+
+- 로그 파일 tail → parse → validate → normalize → PostgreSQL batch insert
+- `trace_id` UNIQUE 제약(Flyway `V2`) + `ON CONFLICT DO NOTHING`으로 재시도 시 중복 방지
+- DB insert 실패 시 offset 미전진(재시도), 잘못된 로그는 dead letter로 분리
+
+**Phase 4 — aims-core: Metric / Rule / Incident (진행 중, Metric Aggregation만 완료)**
+
+- ✅ Metric Aggregation: `service_log`를 1분 윈도우로 집계해 `metric_snapshot` 생성 (스케줄러 기반, 실제 PostgreSQL로 검증 완료)
+- ⬜ Rule Detection — 미구현
+- ⬜ Incident 생성 — 미구현
+
+**Phase 5 이후 — AI Incident Analysis, Alert/AWS/Docker — 미구현**
 
 ---
 
@@ -62,22 +78,34 @@ aims-core
 = metric aggregation / detection / incident / AI / alert를 담당하는 AIMS 본체
 ```
 
-**Phase 1 기준으로는 위 책임에 해당하는 실제 로직이 구현되어 있지 않습니다.** 세 서비스 모두 부팅 가능한 최소 골격 상태이며, 서비스 간 데이터 흐름(로그 생성 → 수집 → 적재 → 집계 → 탐지)은 아직 연결되어 있지 않습니다.
+- `aims-demo`: 위 책임(로그 생성)이 실제로 동작합니다.
+- `aims-collector`: 위 책임(수집·적재)이 실제로 동작합니다.
+- `aims-core`: 위 책임 중 **metric aggregation만** 실제로 동작합니다. detection / incident / AI / alert는 아직 구현 전입니다.
+
+서비스 간 데이터 흐름은 `로그 생성 → 수집 → 적재 → 집계`까지 실제로 연결되어 있고, `집계 → 탐지` 이후는 아직 연결되어 있지 않습니다.
 
 ---
 
 ## 4. 현재 아키텍처
 
-**현재 (Phase 1):**
+**현재:**
 
 ```text
 aims-demo
+    ↓ (실제 연결)
 aims-collector
-aims-core
+    ↓ (실제 연결)
 PostgreSQL
+    ↓ (실제 연결)
+aims-core
+    └── Metric Aggregation   ← 여기까지 실제 동작
+    ├── Rule Detection       ← 미구현
+    ├── Incident             ← 미구현
+    ├── AI Analysis          ← 미구현
+    └── Alert                ← 미구현
 ```
 
-4개 구성요소가 각각 독립적으로 존재하며, 서로 연결되어 동작하지는 않는 상태입니다.
+`aims-demo → aims-collector → PostgreSQL → aims-core(Metric Aggregation)`까지는 실제 데이터가 흐르는 상태이고, 그 이후(Rule Detection~Alert)는 아직 연결되어 있지 않습니다.
 
 **최종 목표:**
 
@@ -102,25 +130,25 @@ aims-core
 
 `aims-core/src/main/resources/db/migration/V1__init_schema.sql`에서 다음 5개 테이블을 정의합니다.
 
-| 테이블 | 설명 | 사용 예정 Phase |
+| 테이블 | 설명 | 상태 |
 |---|---|---|
-| `service_log` | aims-demo가 남긴 구조화 로그가 저장되는 원본 테이블 | Phase 3 (collector가 적재), Phase 4 (집계 시 조회) |
-| `metric_snapshot` | service_log를 시간 윈도우 단위로 집계한 지표(요청 수, 에러 수, P95/P99 지연 등) | Phase 4 (생성), Phase 5 (Rule 평가 시 조회) |
-| `incident` | Rule Detection이 임계치 위반을 판단해 생성하는 장애 레코드와 상태(Lifecycle) | Phase 5 (생성), Phase 6 (조회 API), Phase 8 (Alert 발송) |
-| `incident_signal` | 어떤 Rule/값이 Incident를 트리거했는지 기록하는 상세 근거 | Phase 5 (생성), Phase 7 (AI에 전달되는 구조화 입력) |
-| `ai_analysis` | AI Analyzer가 생성한 요약/추정 원인/권장 조치 | Phase 7 (생성), Phase 6·8 (조회/알림에 활용) |
+| `service_log` | aims-demo가 남긴 구조화 로그가 저장되는 원본 테이블 | ✅ Phase 3에서 collector가 실제로 적재 중 |
+| `metric_snapshot` | service_log를 시간 윈도우 단위로 집계한 지표(요청 수, 에러 수, P95/P99 지연 등) | ✅ Phase 4-1에서 실제로 생성 중 (매분 스케줄러) |
+| `incident` | Rule Detection이 임계치 위반을 판단해 생성하는 장애 레코드와 상태(Lifecycle) | ⬜ 미구현 (Phase 4-2 예정) |
+| `incident_signal` | 어떤 Rule/값이 Incident를 트리거했는지 기록하는 상세 근거 | ⬜ 미구현 (Phase 4-2 예정) |
+| `ai_analysis` | AI Analyzer가 생성한 요약/추정 원인/권장 조치 | ⬜ 미구현 (Phase 5 예정) |
 
-현재는 마이그레이션 스크립트만 작성되어 있으며, 이 테이블들에 실제로 데이터를 쓰거나 읽는 애플리케이션 로직은 아직 없습니다.
+`service_log`, `metric_snapshot`은 마이그레이션뿐 아니라 실제 애플리케이션 로직(적재/집계)이 동작 중입니다. 나머지 3개 테이블은 아직 스키마만 존재합니다.
 
 ---
 
 ## 6. Phase Roadmap
 
 ```text
-Phase 1  - 프로젝트/DB 기반 구성       [현재]
-Phase 2  - aims-demo + structured log
-Phase 3  - log collector
-Phase 4  - metric aggregation
+Phase 1  - 프로젝트/DB 기반 구성       [완료]
+Phase 2  - aims-demo + structured log  [완료]
+Phase 3  - log collector               [완료]
+Phase 4  - metric aggregation          [완료]   ← [현재]
 Phase 5  - rule detection + incident
 Phase 6  - incident API
 Phase 7  - AI analysis
@@ -129,6 +157,8 @@ Phase 9  - Docker 통합
 Phase 10 - AWS 배포
 Phase 11 - E2E 검증 + 문서화
 ```
+
+> 참고: 별도로 정리 중인 상위 요약(Notion 등)에서는 Phase 4를 "Metric / Rule / Incident"로 더 크게 묶어서 부르기도 합니다. 그 기준으로는 지금이 "Phase 4의 절반(Metric Aggregation)까지 완료, Rule Detection·Incident는 남음" 상태입니다. 이 README는 위의 11단계 세부 로드맵을 기준으로 관리합니다.
 
 ---
 
@@ -142,6 +172,7 @@ Phase 11 - E2E 검증 + 문서화
 - `aims-core`: 로컬 PostgreSQL에 연결해 Flyway `V1`+`V2` migration 실제 적용, 5개 테이블 + `service_log.trace_id` UNIQUE 제약 생성 확인, `/actuator/health`의 `db` 컴포넌트 `UP` 확인
 - `aims-collector`: 실제 로그 파일을 tail하여 PostgreSQL `service_log`에 실제 INSERT 확인, DB 장애 시 offset 미전진(재시도) 확인, 동일 배치 재처리 시 중복 미삽입 확인
 - **End-to-end (EXCEPTION 시나리오 포함)**: `aims-demo` → `aims-collector` → PostgreSQL 전체 파이프라인을 NORMAL 요청과 EXCEPTION 시나리오 모두에 대해 실제로 실행해 `service_log`에 `status_code=500`, `exception_type=SimulatedFailureException` 행까지 정상 적재되는 것을 확인 (실제 캡처: 8절 "실행 결과 예시" 참고)
+- **Metric Aggregation (Phase 4-1)**: `aims-core` 스케줄러가 매분 실제로 동작해 `service_log`를 집계, 보낸 트래픽(checkin 1건 + flight 2건 + baggage 2건(1건 EXCEPTION))과 `metric_snapshot`의 `request_count`/`error_count`/`avg_latency_ms`가 정확히 일치하는 것을 확인. Collector 지연이 윈도우 마감보다 늦을 경우 해당 윈도우가 영구 누락되는 케이스(Backfill 미지원)도 실제로 재현 확인 — 별도 이슈로 기록, 우선순위 Low로 보류
 
 **미검증**
 
@@ -263,6 +294,13 @@ Invoke-RestMethod -Uri http://localhost:8080/api/baggage -Method Post -ContentTy
 Invoke-RestMethod -Uri http://localhost:8080/admin/scenario/normal -Method Post
 ```
 `status_code=500`, `exception_type=SimulatedFailureException`인 행이 `service_log`에 그대로 들어오는 것을 확인할 수 있습니다.
+
+**7) Metric Aggregation 확인** (aims-core가 계속 켜진 상태로 1분 정도 대기 후)
+
+```powershell
+psql -U <본인 DB 계정> -h localhost -d aims -c "SELECT service_name, endpoint, window_start, window_end, request_count, error_count, avg_latency_ms, p95_latency_ms, p99_latency_ms FROM metric_snapshot ORDER BY window_start DESC;"
+```
+매분 정각 스케줄러가 `service_log`를 집계해 `metric_snapshot`에 행을 넣습니다. `aims-core` 콘솔에도 `aggregated window [...]: N endpoint(s)` 로그가 매분 찍힙니다.
 
 ### 실행 결과 예시 (실제 캡처, EXCEPTION 시나리오 포함)
 

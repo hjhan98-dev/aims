@@ -19,3 +19,7 @@ management:
   endpoint:
     health:
       show-details: always
+
+aims:
+  metric:
+    window-minutes: ${METRIC_WINDOW_MINUTES:1}

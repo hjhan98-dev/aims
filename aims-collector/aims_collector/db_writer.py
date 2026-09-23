@@ -5,9 +5,9 @@ from psycopg2.extras import execute_values
 
 from .normalizer import ServiceLogRow
 
-# ON CONFLICT DO NOTHING relies on the V2 migration's UNIQUE(trace_id)
-# constraint. See that migration for the "1 request = 1 access log"
-# idempotency-key premise this depends on.
+# ON CONFLICT DO NOTHING은 V2 migration에서 건 UNIQUE(trace_id) 제약이 있어야 동작함.
+# "1 request = 1 access log" 전제로 trace_id를 idempotency key로 쓰는 것이므로,
+# 그 전제와 향후 확장 시 주의사항은 V2 migration 파일의 주석 참고.
 INSERT_SQL = """
     INSERT INTO service_log (
         timestamp, service_name, trace_id, log_level, endpoint,
@@ -45,9 +45,8 @@ class DbWriter:
             with conn:
                 with conn.cursor() as cur:
                     execute_values(cur, INSERT_SQL, values)
-                    # cur.rowcount reflects rows actually inserted, which is
-                    # less than len(rows) whenever ON CONFLICT DO NOTHING
-                    # skipped a duplicate trace_id.
+                    # cur.rowcount는 실제로 삽입된 행 수를 반영함 - ON CONFLICT DO NOTHING으로
+                    # 중복 trace_id가 스킵된 경우엔 len(rows)보다 작게 나옴 (시도 건수가 아니라 실제 삽입 건수)
                     return cur.rowcount
         finally:
             conn.close()

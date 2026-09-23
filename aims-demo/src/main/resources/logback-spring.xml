@@ -8,8 +8,8 @@
         </encoder>
     </appender>
 
-    <!-- Structured NDJSON access log: one JSON object per line, no extra decoration,
-         so aims-collector can parse it with a plain line-by-line JSON reader. -->
+    <!-- 구조화된 NDJSON access 로그: 한 줄에 JSON 객체 하나, 불필요한 장식 없이 -
+         aims-collector가 한 줄씩 읽어서 그대로 JSON 파싱할 수 있게 함 -->
     <appender name="ACCESS_LOG_CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
             <pattern>%msg%n</pattern>

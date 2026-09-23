@@ -7,9 +7,8 @@ from aims_collector.tailer import LogTailer
 
 
 class FakeDbWriter:
-    """Mimics the real DbWriter's ON CONFLICT (trace_id) DO NOTHING
-    behaviour without needing a real PostgreSQL connection, so the
-    read -> insert -> offset ordering can be verified without Docker.
+    """실제 PostgreSQL 연결 없이도 read -> insert -> offset 순서를 검증할 수 있도록,
+    실제 DbWriter의 ON CONFLICT (trace_id) DO NOTHING 동작을 흉내냄 (Docker 불필요).
     """
 
     def __init__(self, fail_times: int = 0):
@@ -61,19 +60,19 @@ def test_db_failure_keeps_offset_unchanged_and_batch_is_retried(tmp_path):
     dead_letter = DeadLetterWriter(str(tmp_path / "dead_letter.log"))
     db_writer = FakeDbWriter(fail_times=1)
 
-    # First attempt: DB insert fails -> offset must not advance.
+    # 첫 시도: DB insert 실패 -> offset이 전진하면 안 됨
     run_once(tailer, db_writer, dead_letter, offset_store)
     assert tailer.offset == 0
     assert offset_store.load() == 0
     assert db_writer.inserted_rows == []
 
-    # Second attempt (retry): DB insert succeeds -> offset advances,
-    # and both rows from the retried batch are inserted exactly once.
+    # 두 번째 시도(재시도): DB insert 성공 -> offset 전진, 재시도된 배치의
+    # 두 행 모두 정확히 한 번씩만 삽입됨
     run_once(tailer, db_writer, dead_letter, offset_store)
     assert tailer.offset > 0
     assert offset_store.load() == tailer.offset
     assert {row.trace_id for row in db_writer.inserted_rows} == {"trace-1", "trace-2"}
-    assert len(db_writer.inserted_rows) == 2  # no duplicates from the retry
+    assert len(db_writer.inserted_rows) == 2  # 재시도로 인한 중복 없음
 
 
 def test_reprocessing_same_batch_does_not_duplicate_rows(tmp_path):
@@ -86,8 +85,8 @@ def test_reprocessing_same_batch_does_not_duplicate_rows(tmp_path):
     db_writer = FakeDbWriter(fail_times=0)
 
     run_once(tailer, db_writer, dead_letter, offset_store)
-    # Simulate a restart that did not persist the confirmed in-memory
-    # offset (worst case): re-run against the same on-disk offset file.
+    # 메모리상 confirm된 offset이 저장되지 않고 재시작된 최악의 경우를 시뮬레이션:
+    # 디스크에 저장된 offset 파일 기준으로 다시 실행
     resumed_tailer = LogTailer(str(log_file), start_offset=offset_store.load())
     run_once(resumed_tailer, db_writer, dead_letter, offset_store)
 
@@ -99,7 +98,7 @@ def test_malformed_and_invalid_lines_go_to_dead_letter_without_blocking_valid_on
     dead_letter_file = tmp_path / "dead_letter.log"
     write_log(log_file, [
         "not valid json",
-        json.dumps({"service": "aims-demo"}),  # missing required fields
+        json.dumps({"service": "aims-demo"}),  # 필수 필드 누락
         valid_line("trace-1"),
     ])
 

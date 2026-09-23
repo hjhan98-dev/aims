@@ -52,8 +52,8 @@ def test_rotation_is_detected_when_file_shrinks(tmp_path):
     first = tailer.read_batch()
     tailer.confirm(first.next_offset)
 
-    # Simulate logback rotating/truncating the active file down to a
-    # single new line.
+    # logback이 활성 파일을 rotation/truncation해서 한 줄짜리 새 파일로
+    # 바뀐 상황을 시뮬레이션
     write(log_file, '{"a":new}\n')
     second = tailer.read_batch()
 

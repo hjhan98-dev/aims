@@ -1,9 +1,8 @@
-"""Integration test against a real PostgreSQL instance.
+"""실제 PostgreSQL 인스턴스를 대상으로 하는 통합 테스트.
 
-Requires infra/docker-compose.yml's postgres service (with the V1+V2
-Flyway migrations already applied by aims-core) to be reachable. Skips
-itself automatically when no database is available, e.g. in this
-environment where Docker Desktop cannot run.
+infra/docker-compose.yml의 postgres 서비스(aims-core가 V1+V2 Flyway migration을
+이미 적용해둔 상태)에 접속 가능해야 함. DB에 접속할 수 없으면(예: Docker Desktop을
+쓸 수 없는 이 환경) 자동으로 skip됨.
 """
 import uuid
 
@@ -46,12 +45,12 @@ def make_row(trace_id: str) -> ServiceLogRow:
 
 def test_duplicate_trace_id_is_not_inserted_twice():
     writer = DbWriter(config.DATABASE_DSN)
-    # A fresh id per run avoids collisions with rows left over from a
-    # previous run of this same test against a persistent local database.
+    # 매번 새 id를 써야 로컬처럼 DB가 계속 남아있는 환경에서 이전 실행의
+    # 잔여 데이터와 충돌하지 않음
     row = make_row(f"integration-test-{uuid.uuid4()}")
 
     first = writer.insert_batch([row])
     second = writer.insert_batch([row])
 
     assert first == 1
-    assert second == 0  # ON CONFLICT DO NOTHING skipped the duplicate
+    assert second == 0  # ON CONFLICT DO NOTHING이 중복 건을 스킵함

@@ -1,16 +1,14 @@
--- Enforce idempotent ingestion for service_log.
+-- service_log 적재를 idempotent(멱등)하게 만들기 위한 제약.
 --
--- Premise (specific to the current AIMS MVP log model, not a general
--- distributed-tracing guarantee): Phase 2's aims-demo emits exactly one
--- structured access-log line per HTTP request, and generates exactly one
--- traceId for that request. Under that "1 request = 1 access log" model,
--- trace_id is safe to use as aims-collector's idempotency key so that
--- re-processing the same log line (e.g. after a collector restart) never
--- creates a duplicate row.
+-- 전제 (일반적인 distributed tracing의 보장이 아니라, 현재 AIMS MVP 로그
+-- 모델에만 해당하는 전제): Phase 2의 aims-demo는 HTTP 요청 1건당 구조화된
+-- access log 줄 1개를 정확히 발생시키고, 그 요청에 대해 traceId도 정확히
+-- 1개만 생성한다. 이 "1 request = 1 access log" 모델 하에서는, 같은 로그
+-- 줄이 재처리돼도(예: collector 재시작 후) 중복 행이 생기지 않도록
+-- trace_id를 aims-collector의 idempotency key로 안전하게 쓸 수 있다.
 --
--- This does NOT mean trace_id is assumed unique across an arbitrary
--- distributed-tracing setup. If the log model later evolves so that
--- multiple events can share one trace (e.g. per-span events within a
--- request), a separate event id / idempotency key will be needed instead
--- of relying on this constraint.
+-- 단, 이게 일반적인 distributed tracing 환경에서 trace_id가 항상 유일하다는
+-- 뜻은 아니다. 이후 로그 모델이 확장되어 하나의 trace가 여러 이벤트를
+-- 공유하게 되면(예: 요청 내부의 span 단위 이벤트), 이 제약에 기대는 대신
+-- 별도의 event id / idempotency key가 필요해질 것이다.
 ALTER TABLE service_log ADD CONSTRAINT uq_service_log_trace_id UNIQUE (trace_id);
