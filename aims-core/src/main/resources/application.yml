@@ -23,3 +23,7 @@ management:
 aims:
   metric:
     window-minutes: ${METRIC_WINDOW_MINUTES:1}
+  rule:
+    error-rate-threshold: ${RULE_ERROR_RATE_THRESHOLD:5.0}
+    p95-latency-threshold-ms: ${RULE_P95_LATENCY_THRESHOLD_MS:2000}
+    exception-count-threshold: ${RULE_EXCEPTION_COUNT_THRESHOLD:10}

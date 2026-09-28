@@ -26,13 +26,14 @@ public class MetricAggregationService {
         this.windowMinutes = windowMinutes;
     }
 
-    public void aggregateLastCompletedWindow() {
+    public List<AggregatedMetric> aggregateLastCompletedWindow() {
         WindowRange window = currentWindowRange();
         List<AggregatedMetric> metrics = repository.aggregate(window.start(), window.end());
         for (AggregatedMetric metric : metrics) {
             repository.upsert(window.start(), window.end(), metric);
         }
         log.info("aggregated window [{}, {}): {} endpoint(s)", window.start(), window.end(), metrics.size());
+        return metrics;
     }
 
     /**
