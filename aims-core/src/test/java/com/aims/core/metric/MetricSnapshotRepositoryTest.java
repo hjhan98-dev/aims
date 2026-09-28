@@ -58,7 +58,7 @@ class MetricSnapshotRepositoryTest {
     void upsertIsIdempotentForTheSameWindow() {
         Instant windowStart = Instant.parse("2026-01-01T00:00:00Z");
         Instant windowEnd = Instant.parse("2026-01-01T00:01:00Z");
-        AggregatedMetric metric = new AggregatedMetric(SERVICE_NAME, ENDPOINT, 3, 1, 200.0, 300.0, 300.0);
+        AggregatedMetric metric = new AggregatedMetric(SERVICE_NAME, ENDPOINT, 3, 1, 200.0, 300.0, 300.0, windowStart, windowEnd);
 
         repository.upsert(windowStart, windowEnd, metric);
         repository.upsert(windowStart, windowEnd, metric);

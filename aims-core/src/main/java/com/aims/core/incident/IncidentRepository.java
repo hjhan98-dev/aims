@@ -28,18 +28,21 @@ public class IncidentRepository {
         return ids.stream().findFirst();
     }
 
-    public long createIncident(String serviceName, String endpoint, String severity, Instant detectedAt, String summary) {
+    public long createIncident(String serviceName, String endpoint, String severity, Instant detectedAt,
+                                String summary, Instant windowStart, Instant windowEnd) {
         KeyHolder keyHolder = new GeneratedKeyHolder();
         jdbcTemplate.update(connection -> {
             PreparedStatement ps = connection.prepareStatement(
-                    "INSERT INTO incident (service_name, endpoint, severity, status, detected_at, summary) "
-                            + "VALUES (?, ?, ?, 'DETECTED', ?, ?)",
+                    "INSERT INTO incident (service_name, endpoint, severity, status, detected_at, summary, "
+                            + "window_start, window_end) VALUES (?, ?, ?, 'DETECTED', ?, ?, ?, ?)",
                     new String[]{"id"});
             ps.setString(1, serviceName);
             ps.setString(2, endpoint);
             ps.setString(3, severity);
             ps.setTimestamp(4, Timestamp.from(detectedAt));
             ps.setString(5, summary);
+            ps.setTimestamp(6, Timestamp.from(windowStart));
+            ps.setTimestamp(7, Timestamp.from(windowEnd));
             return ps;
         }, keyHolder);
         return keyHolder.getKey().longValue();

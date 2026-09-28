@@ -27,7 +27,7 @@ public class MetricAggregationScheduler {
         List<AggregatedMetric> metrics = metricAggregationService.aggregateLastCompletedWindow();
         for (AggregatedMetric metric : metrics) {
             List<RuleViolation> violations = ruleEngine.evaluate(metric);
-            incidentService.recordViolations(metric.serviceName(), metric.endpoint(), violations);
+            incidentService.recordViolations(metric, violations);
         }
     }
 }

@@ -48,7 +48,9 @@ public class MetricSnapshotRepository {
                         rs.getLong("error_count"),
                         rs.getDouble("avg_latency_ms"),
                         rs.getDouble("p95_latency_ms"),
-                        rs.getDouble("p99_latency_ms")
+                        rs.getDouble("p99_latency_ms"),
+                        windowStart,
+                        windowEnd
                 ),
                 Timestamp.from(windowStart), Timestamp.from(windowEnd)
         );
